@@ -1,0 +1,146 @@
+---
+title: "Machine Learning Final Project"
+author: "Marc Hidalgo"
+date: "July 2, 2016"
+output: html_document
+---
+##Background 
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, our goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+The goal of this project is to predict the manner in which subjects have performed the exercise. This is the "classe" variable in the training set. 
+
+##Data
+
+The training data for this project are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+###Load Necessary Packages/Read in the Data
+
+Load the appropriate packages required and read in the data files from CSV. The code assume the files are already downloaded.
+
+```{r}
+setwd("/Users/Marc/coursera/")
+library(ggplot2)
+library(lattice)
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(RColorBrewer)
+library(rattle)
+## if necessary, download the data files
+trainFile <- "pml-training.csv"
+if (!file.exists(trainFile)){
+  fileURL <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+  download.file(fileURL, trainFile, method="curl")
+}
+testFile <- "pml-testing.csv"
+if (!file.exists(testFile)){
+  fileURL <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+  download.file(fileURL, testFile, method="curl")
+}
+trainSet <- read.csv(trainFile)
+testSet <- read.csv(testFile)
+```
+
+###Partition the Data
+
+Split the training data into training and testing partitions (60% and 40%) and use the testSet as the validation sample. Use cross validation within the training partition to improve the model fit and then do an out-of-sample test with the testing partition. Set a seed first so that this part is reproducible.
+
+```{r}
+set.seed(100)
+dataPart <- createDataPartition(y=trainSet$classe, p=0.6, list=FALSE)
+trainingPart <- trainSet[dataPart, ]
+testingPart <- trainSet[-dataPart, ]
+```
+
+###Remove Extraneous Data
+
+Remove variables that are almost always NA since their impact will likely be minimal. Remove variables with near zero variance (i.e., practically constant). And remove variables that likely don't impact the results. We perform that analysis on the trainingPart data set, since it's the larger of the two, and apply the results to both trainingPart and testingPart.
+
+```{r}
+# remove generally NA variables
+mostlyNA <- sapply(trainingPart, function(x) mean(is.na(x))) > 0.95
+trainingPart <- trainingPart[, mostlyNA==F]
+testingPart <- testingPart[, mostlyNA==F]
+
+# remove variance near zero
+nearZero <- nearZeroVar(trainingPart)
+trainingPart <- trainingPart[, -nearZero]
+testingPart <- testingPart[, -nearZero]
+
+# remove variables that likely don't impact the results. These happen to be the first five variables
+trainingPart <- trainingPart[, -(1:5)]
+testingPart <- testingPart[, -(1:5)]
+```
+
+###Build the Models
+
+Use three different method to build a model of the data:
+
+1. Decision trees with CART (rpart)
+
+2. Stochastic gradient boosting trees (gbm)
+
+3. Random forest decision trees (rf)
+
+###Decision Tree
+
+```{r}
+dtModel<-train(classe ~ ., data=trainingPart, method="rpart")
+fancyRpartPlot(dtModel$finalModel,cex=.5,under.cex=1,shadow.offset=0)
+predictDt<-predict(dtModel, testingPart)
+dtMat<-confusionMatrix(predictDt, testingPart$classe)
+dtMat
+dtAccuracy <- dtMat$overall[[1]] 
+```
+
+###Stochastic Gradient Boosting Trees
+
+```{r}
+gbmModel<-train(classe ~.,data=trainingPart,method="gbm",verbose=FALSE,trControl = trainControl(number=5,repeats=1))
+predictGbm<-predict(gbmModel,testingPart)
+gbmMat<-confusionMatrix(predictGbm,testingPart$classe)
+gbmMat
+gbmAccuracy <- gbmMat$overall[[1]]
+```
+###Random Forest Decision Tree
+
+```{r}
+library(randomForest)
+rfModel<-randomForest(classe ~., data=trainingPart)
+predictRf<-predict(rfModel,testingPart)
+rfMat<-confusionMatrix(predictRf,testingPart$classe)
+rfMat
+rfAccuracy<-rfMat$overall[[1]]
+```
+
+Based on the results above, the accuracy for each model is given below:
+
+1. Decision trees with CART (rpart): `r dtAccuracy`
+
+2. Stochastic gradient boosting trees (gbm): `r gbmAccuracy`
+
+3. Random forest decision trees (rf): `r rfAccuracy`
+
+The model with the best fit is therefore the random forest model. We'll next evaluate the random forest model against the test dataset. First, we estimate the out of sample error.
+
+###Out of Sample Error
+
+Since we'll be using random forest model and since the accuracy of the random forest method is `r rfAccuracy`, the estimated out of sample error is given by:
+100.00% - `r rfAccuracy*100.0`% = `r 100.00-rfAccuracy*100.0`%.
+
+
+###Data for Automated Quiz Evaluation
+
+Use the test dataset and the random forest model to create the data to be submitted to the quiz.
+
+```{r}
+predictRfTest<-predict(rfModel,testSet)
+predictRfTest
+```
