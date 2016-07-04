@@ -109,8 +109,7 @@ Use three different method to build a model of the data:
 dtModel<-train(classe ~ ., data=trainingPart, method="rpart")
 fancyRpartPlot(dtModel$finalModel,cex=.5,under.cex=1,shadow.offset=0)
 ```
-
-![](machineLearningProject_files/figure-html/unnamed-chunk-4-1.png)<!-- -->
+![plot of chunk unnamed-chunk-4](figure/unnamed-chunk-4-1.png) 
 
 ```r
 predictDt<-predict(dtModel, testingPart)
